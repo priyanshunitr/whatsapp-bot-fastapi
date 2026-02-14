@@ -14,7 +14,7 @@ chat_history = [
 ]
 
 with open (r'D:\old\Dev\whatsapp-bot-fastapi\chat_history.txt') as f:
-    chat_history.extend(f.readlines())
+    chat_history.extend([line.strip() for line in f.readlines()])
 
 template = ChatPromptTemplate([
     ('system', 'You are a helpful AI assistant'),
@@ -36,14 +36,36 @@ async def reply_whatsapp(request: Request):
     print(f"Message from user: {message}")
 
     ## INJECTING BOT ##
-    chat_history.append(HumanMessage(content=message))
+    chat_history.append(HumanMessage(content="User: " + message))
     prompt = template.invoke({'recorded_chats': chat_history })
     result = model.invoke (prompt)
-    chat_history.append(AIMessage(content=(result.content)))
+    chat_history.append(AIMessage(content=("Bot: " + result.content)))
 
     # Create a new Twilio MessagingResponse
     resp = MessagingResponse()
     resp.message(result.content)
+
+    # Save chat history
+    with open(r'D:\old\Dev\whatsapp-bot-fastapi\chat_history.txt', 'w') as f:
+        # Convert message objects to strings and ensure we get just the content
+        history_lines = []
+        for msg in chat_history:
+            # Skip SystemMessages to prevent duplication on reload
+            if isinstance(msg, SystemMessage):
+                continue
+                
+            content = ""
+            if hasattr(msg, 'content'):
+                content = msg.content
+            else:
+                content = str(msg).strip()
+            
+            # Also filter out string versions if they got saved previously
+            if "You are a helpful assistant" in content:
+                 continue
+                 
+            history_lines.append(content)
+        f.write('\n'.join(history_lines))
 
     # Return the TwiML (as XML) response
     return Response(content=str(resp), media_type="application/xml")
